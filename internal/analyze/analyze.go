@@ -27,8 +27,9 @@ const (
 )
 
 type symbolRef struct {
-	fileID string
-	name   string
+	fileID   string
+	name     string
+	language string
 }
 
 // Run analyzes every requested file and returns the project response.
@@ -89,7 +90,7 @@ func Run(request model.Request) (model.Response, error) {
 	for unitIndex := range units {
 		unit := &units[unitIndex]
 		for _, symbol := range unit.Symbols {
-			ref := symbolRef{fileID: unit.File.ID, name: symbolPath(*unit, symbol)}
+			ref := symbolRef{fileID: unit.File.ID, name: symbolPath(*unit, symbol), language: unit.Language}
 			qualified[strings.ToLower(symbol.Qualified)] = ref
 			key := strings.ToLower(symbol.Name)
 			bare[key] = append(bare[key], ref)
@@ -126,7 +127,7 @@ func Run(request model.Request) (model.Response, error) {
 		}
 		for _, call := range unit.Calls {
 			from := relationSource(*unit, call.From, request.Options.SymbolDocuments)
-			target, ok := resolveReference(call.Name, qualified, bare)
+			target, ok := resolveReference(call.Name, qualified, bare, *unit)
 			if !ok {
 				continue
 			}
@@ -138,7 +139,7 @@ func Run(request model.Request) (model.Response, error) {
 		}
 		for _, reference := range unit.References {
 			from := relationSource(*unit, reference.From, request.Options.SymbolDocuments)
-			target, ok := resolveReference(reference.Name, qualified, bare)
+			target, ok := resolveReference(reference.Name, qualified, bare, *unit)
 			if !ok {
 				continue
 			}
@@ -154,7 +155,7 @@ func Run(request model.Request) (model.Response, error) {
 		}
 		for _, base := range unit.Bases {
 			from := relationSource(*unit, base.From, request.Options.SymbolDocuments)
-			target, ok := resolveReference(base.Name, qualified, bare)
+			target, ok := resolveReference(base.Name, qualified, bare, *unit)
 			if !ok {
 				continue
 			}
@@ -370,7 +371,7 @@ func unitByID(units []model.Unit, id string) model.Unit {
 	return model.Unit{File: model.File{ID: id}}
 }
 
-func resolveReference(name string, qualified map[string]symbolRef, bare map[string][]symbolRef) (symbolRef, bool) {
+func resolveReference(name string, qualified map[string]symbolRef, bare map[string][]symbolRef, source model.Unit) (symbolRef, bool) {
 	key := strings.ToLower(strings.TrimSpace(name))
 	if key == "" {
 		return symbolRef{}, false
@@ -382,7 +383,32 @@ func resolveReference(name string, qualified map[string]symbolRef, bare map[stri
 	if len(matches) == 1 {
 		return matches[0], true
 	}
+	if len(matches) == 0 {
+		return symbolRef{}, false
+	}
+	if ref, ok := uniqueMatch(matches, func(ref symbolRef) bool {
+		return ref.fileID == source.File.ID
+	}); ok {
+		return ref, true
+	}
+	if ref, ok := uniqueMatch(matches, func(ref symbolRef) bool {
+		return ref.language == source.Language
+	}); ok {
+		return ref, true
+	}
 	return symbolRef{}, false
+}
+
+func uniqueMatch(matches []symbolRef, keep func(symbolRef) bool) (symbolRef, bool) {
+	var found symbolRef
+	count := 0
+	for _, ref := range matches {
+		if keep(ref) {
+			found = ref
+			count++
+		}
+	}
+	return found, count == 1
 }
 
 func resolveImport(path string, units []model.Unit) (string, bool) {
