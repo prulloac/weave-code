@@ -76,6 +76,16 @@ func walk(node *bonsaipython.Node, source []byte, unit *model.Unit, parent strin
 					unit.Calls = append(unit.Calls, model.Reference{From: qualified, Name: target})
 				}
 			}
+			parameters := parameterNames(node, source)
+			for ident := range body.Find(bonsaipython.KindIdentifier) {
+				candidate := strings.TrimSpace(string(ident.Text(source)))
+				if candidate == "" || candidate == name || parameters[candidate] {
+					continue
+				}
+				unit.References = append(unit.References, model.Reference{
+					From: qualified, Name: candidate, Kind: "references",
+				})
+			}
 		}
 		return
 	case bonsaipython.KindClassDefinition:
@@ -120,6 +130,20 @@ func walk(node *bonsaipython.Node, source []byte, unit *model.Unit, parent strin
 	for _, child := range node.Children {
 		walk(child, source, unit, parent, currentFunction)
 	}
+}
+
+func parameterNames(node *bonsaipython.Node, source []byte) map[string]bool {
+	names := map[string]bool{}
+	parameters := node.ChildByField(bonsaipython.FieldParameters)
+	if parameters == nil {
+		return names
+	}
+	for ident := range parameters.Find(bonsaipython.KindIdentifier) {
+		if name := strings.TrimSpace(string(ident.Text(source))); name != "" {
+			names[name] = true
+		}
+	}
+	return names
 }
 
 func parseImports(text string) []model.Import {

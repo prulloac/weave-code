@@ -74,6 +74,13 @@ var callKinds = map[string]bool{
 	"call":                           true,
 }
 
+var referenceKinds = map[string]bool{
+	"identifier":          true,
+	"type_identifier":     true,
+	"property_identifier": true,
+	"field_identifier":    true,
+}
+
 type languageSpec struct {
 	name         string
 	language     *gotreesitter.Language
@@ -182,6 +189,12 @@ func walk(node *gotreesitter.Node, source []byte, spec languageSpec, unit *model
 	if spec.name == "dart" && current != "" {
 		for _, callee := range dartInvocations(node, source, spec.language) {
 			unit.Calls = append(unit.Calls, model.Reference{From: current, Name: callee})
+		}
+	}
+	if referenceKinds[kind] && current != "" {
+		name := strings.TrimSpace(node.Text(source))
+		if name != "" && !reservedNames[name] {
+			unit.References = append(unit.References, model.Reference{From: current, Name: name, Kind: "references"})
 		}
 	}
 	if isBaseKind(node.Type(spec.language)) && current != "" {

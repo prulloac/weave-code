@@ -12,6 +12,8 @@ type File struct {
 type Options struct {
 	SymbolDocuments bool     `json:"symbol_documents"`
 	Relations       []string `json:"relations,omitempty"`
+	ParseGenerated  bool     `json:"parse_generated,omitempty"`
+	Ignore          []string `json:"ignore,omitempty"`
 }
 
 // Request is the project_analysis_request payload.

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,8 +59,11 @@ func TestAnalyzeTreeSitterLanguages(t *testing.T) {
 		relations []relation
 	}{
 		"javascript": {
-			map[string]string{"app.js": "import x from 'lib';\nfunction greet() { helper(); }\nfunction helper() {}\n"},
-			"greet", []relation{{"app.js#greet", "app.js#helper", "calls"}},
+			map[string]string{"app.js": "import x from 'lib';\nfunction greet() { helper(); const alias = helper; }\nfunction helper() {}\n"},
+			"greet", []relation{
+				{"app.js#greet", "app.js#helper", "calls"},
+				{"app.js#greet", "app.js#helper", "references"},
+			},
 		},
 		"typescript": {
 			map[string]string{"app.ts": "import { x } from 'lib';\ninterface Runnable {}\nclass Server implements Runnable { run(): void { helper(); } }\nfunction helper(): void {}\n"},
@@ -171,7 +175,7 @@ func TestDescribeJSON(t *testing.T) {
 
 func TestAnalyzeGo(t *testing.T) {
 	root := writeFiles(t, map[string]string{
-		"a.go": "package main\n\nimport \"fmt\"\n\ntype Base struct{}\ntype Server struct{ Base }\n\nfunc main() { Run(); fmt.Println(\"ok\") }\nfunc Run() {}\n",
+		"a.go": "package main\n\nimport \"fmt\"\n\ntype Base struct{}\ntype Server struct{ Base }\n\nfunc main() { Run(); fmt.Println(\"ok\"); _ = Server{} }\nfunc Run() {}\n",
 		"b.go": "package main\n\nimport \"fmt\"\n\nfunc Helper() { fmt.Println(\"ok\") }\n",
 	})
 	response := analyzeProject(t, root, []string{"a.go", "b.go"}, true)
@@ -182,6 +186,7 @@ func TestAnalyzeGo(t *testing.T) {
 		t.Fatal("expected symbol documents for a.go")
 	}
 	assertRelation(t, response.Relations, "a.go#main", "a.go#Run", "calls")
+	assertRelation(t, response.Relations, "a.go#main", "a.go#Server", "references")
 	assertRelation(t, response.Relations, "a.go#Server", "a.go#Base", "inherits")
 	assertRelation(t, response.Relations, "a.go", "_code/external/go/fmt", "imports")
 	foundExternal := false
@@ -197,7 +202,7 @@ func TestAnalyzeGo(t *testing.T) {
 
 func TestAnalyzePython(t *testing.T) {
 	root := writeFiles(t, map[string]string{
-		"pkg/mod.py": "import os\n\nclass Base:\n    pass\n\nclass Server(Base):\n    def run(self):\n        helper()\n\ndef helper():\n    pass\n",
+		"pkg/mod.py": "import os\n\nclass Base:\n    pass\n\nclass Server(Base):\n    def run(self):\n        helper()\n\ndef helper():\n    pass\n\ndef build():\n    return Server\n",
 	})
 	response := analyzeProject(t, root, []string{"pkg/mod.py"}, true)
 	if len(response.Documents) != 1 {
@@ -205,6 +210,7 @@ func TestAnalyzePython(t *testing.T) {
 	}
 	assertRelation(t, response.Relations, "pkg/mod.py#Server", "pkg/mod.py#Base", "inherits")
 	assertRelation(t, response.Relations, "pkg/mod.py#Server.run", "pkg/mod.py#helper", "calls")
+	assertRelation(t, response.Relations, "pkg/mod.py#build", "pkg/mod.py#Server", "references")
 }
 
 func TestSymbolDocumentsFromEnvironment(t *testing.T) {
@@ -228,6 +234,101 @@ func TestLexicalFallback(t *testing.T) {
 	}
 	if response.Documents[0].ContentMetadata["status"] != "fallback" {
 		t.Fatalf("expected fallback status, got %+v", response.Documents[0].ContentMetadata)
+	}
+}
+
+func TestAnalyzeSkipsGeneratedAndIgnored(t *testing.T) {
+	root := writeFiles(t, map[string]string{
+		".weave/code.yaml": "ignore:\n  - \"third_party/**\"\n",
+		"src/main.go":      "package main\n\nfunc main() {}\n",
+		"src/app.gen.go":   "package main\n\nfunc Generated() {}\n",
+		"vendor/lib.go":    "package lib\n",
+		"third_party/x.go": "package x\n",
+	})
+	response := analyzeProject(t, root, []string{"src/main.go", "src/app.gen.go", "vendor/lib.go", "third_party/x.go"}, false)
+	if len(response.Documents) != 1 || response.Documents[0].ID != "src/main.go" {
+		t.Fatalf("expected only src/main.go, got %+v", response.Documents)
+	}
+	skipped := 0
+	for _, warning := range response.Warnings {
+		if strings.Contains(warning, "skipped") {
+			skipped++
+		}
+	}
+	if skipped != 3 {
+		t.Fatalf("expected three skip warnings, got %+v", response.Warnings)
+	}
+}
+
+func TestAnalyzeParseGeneratedOptIn(t *testing.T) {
+	root := writeFiles(t, map[string]string{
+		".weave/code.yaml": "parse_generated: true\n",
+		"app.gen.go":       "package main\n\nfunc Generated() {}\n",
+	})
+	response := analyzeProject(t, root, []string{"app.gen.go"}, false)
+	if len(response.Documents) != 1 {
+		t.Fatalf("expected generated file, got %+v", response.Documents)
+	}
+}
+
+func TestAnalyzeSkipsInvalidUTF8(t *testing.T) {
+	root := writeFiles(t, map[string]string{
+		"bad.go": string([]byte{0xff, 0xfe, 0x00}),
+	})
+	response := analyzeProject(t, root, []string{"bad.go"}, false)
+	if len(response.Documents) != 0 {
+		t.Fatalf("expected no documents, got %+v", response.Documents)
+	}
+	if len(response.Warnings) == 0 || !strings.Contains(response.Warnings[0], "invalid UTF-8") {
+		t.Fatalf("expected invalid UTF-8 warning, got %+v", response.Warnings)
+	}
+}
+
+func TestAnalyzeSkipsOversizedFile(t *testing.T) {
+	body := "package main\n" + strings.Repeat("// padding padding padding\n", (4<<20)/24+10)
+	root := writeFiles(t, map[string]string{"big.go": body})
+	response := analyzeProject(t, root, []string{"big.go"}, false)
+	if len(response.Documents) != 0 {
+		t.Fatalf("expected no documents, got %+v", response.Documents)
+	}
+	if len(response.Warnings) == 0 || !strings.Contains(response.Warnings[0], "exceeds 4 MiB") {
+		t.Fatalf("expected size warning, got %+v", response.Warnings)
+	}
+}
+
+func TestAnalyzeTruncatesSymbols(t *testing.T) {
+	var builder strings.Builder
+	builder.WriteString("package main\n\n")
+	for index := 0; index < 2001; index++ {
+		fmt.Fprintf(&builder, "func f%d() {}\n", index)
+	}
+	root := writeFiles(t, map[string]string{"big.go": builder.String()})
+	response := analyzeProject(t, root, []string{"big.go"}, true)
+	if len(response.Documents) != 1 {
+		t.Fatalf("expected one document, got %+v", response.Documents)
+	}
+	if got := len(response.Documents[0].SymbolDocuments); got != 2000 {
+		t.Fatalf("symbol documents = %d, want 2000", got)
+	}
+	found := false
+	for _, warning := range response.Warnings {
+		if strings.Contains(warning, "symbol documents truncated") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected truncation warning, got %+v", response.Warnings)
+	}
+}
+
+func TestSymbolDocumentsFromConfig(t *testing.T) {
+	root := writeFiles(t, map[string]string{
+		".weave/code.yaml": "symbol_documents: true\n",
+		"a.go":             "package main\n\nfunc main() {}\n",
+	})
+	response := analyzeProject(t, root, []string{"a.go"}, false)
+	if len(response.Documents) != 1 || len(response.Documents[0].SymbolDocuments) == 0 {
+		t.Fatalf("expected symbol documents from config, got %+v", response.Documents)
 	}
 }
 

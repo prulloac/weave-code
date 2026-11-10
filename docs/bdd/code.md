@@ -58,6 +58,36 @@ Core contract: [weave-code.md](https://github.com/prulloac/weave-docs/blob/main/
 - **And** the parser status is `parsed`, not `fallback`
 - **And** the build contains no C library or CGO dependency
 
+### Scenario: Calls and references resolve
+
+- **Given** a function that calls another function
+- **And** a function that references a type without calling it
+- **When** the project is analyzed
+- **Then** `calls` and `references` relations link the symbols
+
+## Feature: Ignored paths and limits
+
+### Scenario: Generated and ignored files are skipped
+
+- **Given** `.weave/code.yaml` with an `ignore` pattern
+- **And** a generated file, a vendor file and a matching path
+- **When** the project is analyzed
+- **Then** those files are not returned as documents
+- **And** each skipped file produces a warning
+
+### Scenario: Generated files can be parsed
+
+- **Given** `.weave/code.yaml` with `parse_generated: true`
+- **When** a generated source file is analyzed
+- **Then** its document and symbols are returned
+
+### Scenario: Oversized or invalid files are skipped
+
+- **Given** a source file larger than 4 MiB or containing invalid UTF-8
+- **When** the project is analyzed
+- **Then** the file is skipped with a warning
+- **And** symbol documents are capped at 2,000 per file
+
 ## Feature: Fallback and external targets
 
 ### Scenario: Invalid Go falls back

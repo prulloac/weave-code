@@ -20,10 +20,11 @@ analysis over stdin/stdout and never imports Weave engine internals.
 main.go                 CLI, describe/version, project analysis entrypoint
 internal/model/         request, response, unit and symbol types
 internal/analyze/       project orchestration and relation resolution
-internal/golanglang/    Go standard-library parser
-internal/pythonlang/    pure-Go tree-sitter Python parser
+internal/golanglang/     Go standard-library parser
+internal/pythonlang/     pure-Go tree-sitter Python parser
 internal/treesitterlang/ pure-Go tree-sitter parsers for the remaining languages
-internal/lexical/       fallback extraction
+internal/codeconfig/     `.weave/code.yaml` loading and ignore matching
+internal/lexical/        fallback extraction
 docs/bdd/               extension-side behavior scenarios
 scripts/                verification and installers
 ```

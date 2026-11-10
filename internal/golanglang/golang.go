@@ -70,6 +70,7 @@ func Parse(file model.File, source []byte) (model.Unit, error) {
 			}
 			unit.Symbols = append(unit.Symbols, symbol)
 			collectCalls(typed.Body, symbol.Qualified, &unit)
+			collectReferences(typed.Body, symbol.Qualified, &unit)
 		case *ast.GenDecl:
 			for _, spec := range typed.Specs {
 				switch entry := spec.(type) {
@@ -119,6 +120,35 @@ func collectCalls(body *ast.BlockStmt, from string, unit *model.Unit) {
 		if name != "" {
 			unit.Calls = append(unit.Calls, model.Reference{From: from, Name: name})
 		}
+		return true
+	})
+}
+
+func collectReferences(body *ast.BlockStmt, from string, unit *model.Unit) {
+	if body == nil {
+		return
+	}
+	ast.Inspect(body, func(node ast.Node) bool {
+		ident, ok := node.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if ident.Name == "" || ident.Name == "_" {
+			return true
+		}
+		if ident.Obj != nil {
+			switch ident.Obj.Kind {
+			case ast.Pkg:
+				return true
+			case ast.Var:
+				if decl, ok := ident.Obj.Decl.(ast.Node); ok && decl.Pos() >= body.Pos() && decl.End() <= body.End() {
+					return true
+				}
+			}
+		}
+		unit.References = append(unit.References, model.Reference{
+			From: from, Name: ident.Name, Kind: "references",
+		})
 		return true
 	})
 }

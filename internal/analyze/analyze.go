@@ -1,17 +1,29 @@
 package analyze
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/prulloac/weave-code/internal/codeconfig"
 	"github.com/prulloac/weave-code/internal/golanglang"
 	"github.com/prulloac/weave-code/internal/lexical"
 	"github.com/prulloac/weave-code/internal/model"
 	"github.com/prulloac/weave-code/internal/pythonlang"
 	"github.com/prulloac/weave-code/internal/treesitterlang"
+)
+
+const (
+	maxSourceFiles      = 10_000
+	maxProjectBytes     = 512 << 20
+	maxSourceFileBytes  = 4 << 20
+	maxSymbolsPerFile   = 2_000
+	maxProjectRelations = 1_000_000
+	maxDocCommentBytes  = 64 << 10
 )
 
 type symbolRef struct {
@@ -21,17 +33,54 @@ type symbolRef struct {
 
 // Run analyzes every requested file and returns the project response.
 func Run(request model.Request) (model.Response, error) {
-	units := make([]model.Unit, 0, len(request.Files))
-	response := model.Response{V: "weave.cli/v1", Documents: make([]model.Document, 0, len(request.Files))}
-	for _, file := range request.Files {
+	files := request.Files
+	response := model.Response{V: "weave.cli/v1", Documents: make([]model.Document, 0, len(files))}
+	if len(files) > maxSourceFiles {
+		response.Warnings = append(response.Warnings, fmt.Sprintf("project file list truncated to %d files", maxSourceFiles))
+		files = files[:maxSourceFiles]
+	}
+	config := codeconfig.Config{
+		ParseGenerated: request.Options.ParseGenerated,
+		Ignore:         request.Options.Ignore,
+	}
+	units := make([]model.Unit, 0, len(files))
+	var totalBytes int64
+	for _, file := range files {
+		if reason := config.SkipReason(file.Path); reason != "" {
+			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: skipped (%s)", file.ID, reason))
+			continue
+		}
 		path := filepath.Join(request.BundleRoot, filepath.FromSlash(file.Path))
+		info, err := os.Stat(path)
+		if err != nil {
+			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: %v", file.ID, err))
+			units = append(units, model.Unit{File: file, Status: "fallback", Parser: "none"})
+			continue
+		}
+		if info.Size() > maxSourceFileBytes {
+			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: skipped (file exceeds 4 MiB)", file.ID))
+			continue
+		}
+		if totalBytes+info.Size() > maxProjectBytes {
+			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: skipped (project exceeds 512 MiB)", file.ID))
+			continue
+		}
 		source, err := os.ReadFile(path)
 		if err != nil {
 			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: %v", file.ID, err))
 			units = append(units, model.Unit{File: file, Status: "fallback", Parser: "none"})
 			continue
 		}
+		if !utf8.Valid(source) || bytes.IndexByte(source, 0) >= 0 {
+			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: skipped (invalid UTF-8 or NUL byte)", file.ID))
+			continue
+		}
+		totalBytes += int64(len(source))
 		unit := parseFile(file, source)
+		if len(unit.Symbols) > maxSymbolsPerFile {
+			response.Warnings = append(response.Warnings, fmt.Sprintf("%s: symbol documents truncated to %d", file.ID, maxSymbolsPerFile))
+			unit.Symbols = unit.Symbols[:maxSymbolsPerFile]
+		}
 		units = append(units, unit)
 	}
 
@@ -87,6 +136,22 @@ func Run(request model.Request) (model.Response, error) {
 			}
 			response.Relations = append(response.Relations, model.Relation{From: from, To: to, Kind: "calls"})
 		}
+		for _, reference := range unit.References {
+			from := relationSource(*unit, reference.From, request.Options.SymbolDocuments)
+			target, ok := resolveReference(reference.Name, qualified, bare)
+			if !ok {
+				continue
+			}
+			to := relationTarget(*unit, target, units, request.Options.SymbolDocuments)
+			if to == "" || from == to {
+				continue
+			}
+			kind := reference.Kind
+			if kind == "" {
+				kind = "references"
+			}
+			response.Relations = append(response.Relations, model.Relation{From: from, To: to, Kind: kind})
+		}
 		for _, base := range unit.Bases {
 			from := relationSource(*unit, base.From, request.Options.SymbolDocuments)
 			target, ok := resolveReference(base.Name, qualified, bare)
@@ -132,6 +197,10 @@ func Run(request model.Request) (model.Response, error) {
 		}
 		return response.Relations[i].Kind < response.Relations[j].Kind
 	})
+	if len(response.Relations) > maxProjectRelations {
+		response.Warnings = append(response.Warnings, fmt.Sprintf("relations truncated to %d", maxProjectRelations))
+		response.Relations = response.Relations[:maxProjectRelations]
+	}
 	return response, nil
 }
 
@@ -214,7 +283,7 @@ func fileDocument(unit model.Unit) model.Document {
 func symbolDocument(unit model.Unit, symbol model.Symbol) model.Document {
 	body := symbol.Signature
 	if symbol.Doc != "" {
-		body += "\n\n" + symbol.Doc
+		body += "\n\n" + truncate(symbol.Doc, maxDocCommentBytes)
 	}
 	return model.Document{
 		ID:          symbolID(unit, symbol),

@@ -40,6 +40,23 @@ For each source file the extension returns:
 - imports, declares, references, calls, inherits and implements relations;
 - external dependency documents once a module is referenced more than once.
 
+## Configuration
+
+`.weave/code.yaml` (or the file named by `WEAVE_CODE_CONFIG`) supports:
+
+```yaml
+symbol_documents: true
+parse_generated: false
+ignore:
+  - "third_party/**"
+  - "**/*_test.go"
+```
+
+Ignored paths, generated files, dependency/build directories and hidden files are skipped before
+their bytes are read. `parse_generated: true` opts generated and minified files back in. The
+extension enforces the 4 MiB file, 512 MiB project, 10,000 file, 2,000 symbol and 1,000,000 relation
+limits from the specification.
+
 ## Install
 
 ```sh
