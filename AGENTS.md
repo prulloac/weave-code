@@ -22,6 +22,7 @@ internal/model/         request, response, unit and symbol types
 internal/analyze/       project orchestration and relation resolution
 internal/golanglang/    Go standard-library parser
 internal/pythonlang/    pure-Go tree-sitter Python parser
+internal/treesitterlang/ pure-Go tree-sitter parsers for the remaining languages
 internal/lexical/       fallback extraction
 docs/bdd/               extension-side behavior scenarios
 scripts/                verification and installers
@@ -42,6 +43,9 @@ scripts/                verification and installers
 
 - Go extraction uses the standard library parser.
 - Python extraction uses `github.com/msuozzo/bonsai/bonsai-python`, a pure-Go tree-sitter runtime.
+- JavaScript, TypeScript, Rust, C, C++, Java, Scala, Dart and Zig use
+  `github.com/odvcencio/gotreesitter` grammar packages. Dart method bodies are siblings of their
+  signatures, so symbol context carries across sibling nodes.
 - Fixtures are temporary directories; no real project or database is used.
 - Keep `--describe --json` stable; Weave reads it before every project write.
 

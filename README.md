@@ -14,8 +14,9 @@ weave relate ~/repo src/main.go#main --depth 2 --relation imports,declares,calls
 ## Supported languages
 
 - Full syntax-tree extraction: Go through the Go standard library parser; Python through a pure-Go
-  tree-sitter runtime.
-- Lexical fallback: JavaScript, TypeScript, Rust, C, C++, Java, Scala, Dart and Zig.
+  tree-sitter runtime; JavaScript, TypeScript, Rust, C, C++, Java, Scala, Dart and Zig through
+  pure-Go tree-sitter grammars.
+- Lexical fallback when a file cannot be parsed.
 - Static, C-free builds only. No compiler, package manager, language server or network access.
 
 ## Discovered files

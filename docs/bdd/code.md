@@ -1,7 +1,7 @@
 ---
 type: behavior
 title: "Weave Code Extension Behavior"
-description: "Extension-side scenarios for Go and Python extraction, relation output and lexical fallback."
+description: "Extension-side scenarios for Go, Python and tree-sitter extraction, relation output and lexical fallback."
 status: draft
 ---
 
@@ -18,7 +18,8 @@ Core contract: [weave-code.md](https://github.com/prulloac/weave-docs/blob/main/
 - **Then** it returns `weave.extension/v1`
 - **And** the name is `code`
 - **And** analysis modes include `project`
-- **And** source extensions include Go and Python
+- **And** source extensions include Go, Python, JavaScript, TypeScript, Rust, C, C++, Java, Scala,
+  Dart and Zig
 
 ## Feature: Go extraction
 
@@ -45,6 +46,17 @@ Core contract: [weave-code.md](https://github.com/prulloac/weave-docs/blob/main/
 - **When** the project is analyzed
 - **Then** symbol documents use `<file>#<symbol>`
 - **And** inheritance and call relations resolve
+
+## Feature: Tree-sitter extraction
+
+### Scenario: Remaining languages parse without C libraries
+
+- **Given** a JavaScript, TypeScript, Rust, C, C++, Java, Scala, Dart or Zig source file
+- **When** the project is analyzed
+- **Then** symbol documents use `<file>#<symbol>` and nested methods use `<type>.<method>`
+- **And** call, inheritance and implementation relations resolve in one project pass
+- **And** the parser status is `parsed`, not `fallback`
+- **And** the build contains no C library or CGO dependency
 
 ## Feature: Fallback and external targets
 

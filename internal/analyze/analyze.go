@@ -11,6 +11,7 @@ import (
 	"github.com/prulloac/weave-code/internal/lexical"
 	"github.com/prulloac/weave-code/internal/model"
 	"github.com/prulloac/weave-code/internal/pythonlang"
+	"github.com/prulloac/weave-code/internal/treesitterlang"
 )
 
 type symbolRef struct {
@@ -96,7 +97,11 @@ func Run(request model.Request) (model.Response, error) {
 			if to == "" || from == to {
 				continue
 			}
-			response.Relations = append(response.Relations, model.Relation{From: from, To: to, Kind: "inherits"})
+			kind := base.Kind
+			if kind == "" {
+				kind = "inherits"
+			}
+			response.Relations = append(response.Relations, model.Relation{From: from, To: to, Kind: kind})
 		}
 	}
 	for id, relations := range external {
@@ -131,7 +136,8 @@ func Run(request model.Request) (model.Response, error) {
 }
 
 func parseFile(file model.File, source []byte) model.Unit {
-	switch languageFor(file.Path) {
+	language := languageFor(file.Path)
+	switch language {
 	case "go":
 		unit, err := golanglang.Parse(file, source)
 		if err == nil {
@@ -142,8 +148,12 @@ func parseFile(file model.File, source []byte) model.Unit {
 		if err == nil {
 			return unit
 		}
+	default:
+		if unit, ok := treesitterlang.Parse(file, source, language); ok {
+			return unit
+		}
 	}
-	return lexical.Parse(file, source, languageFor(file.Path))
+	return lexical.Parse(file, source, language)
 }
 
 func languageFor(path string) string {

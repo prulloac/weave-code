@@ -23,6 +23,7 @@ type Import struct {
 type Reference struct {
 	From string `json:"from"`
 	Name string `json:"name"`
+	Kind string `json:"kind,omitempty"`
 }
 
 // Unit is one parsed source file.
