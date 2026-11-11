@@ -61,4 +61,4 @@ scripts/                verification and installers
 
 - Tags use `vX.Y.Z`; the release workflow builds six static archives and a draft GitHub Release.
 - Keep the binary name `weave-code`; Weave discovers extensions by the `weave-` prefix.
-- Ceiling: current product release is 0.8.0 once the code extension ships.
+- Current product release: `v0.8.0`. It requires `weave v0.8.0` project analysis.
