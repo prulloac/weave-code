@@ -105,6 +105,23 @@ Core contract: [weave-code.md](https://github.com/prulloac/weave-docs/blob/main/
 - **Then** one `_code/external/...` document is returned
 - **And** both imports point to it
 
+## Feature: Generic output
+
+### Scenario: Documents declare their types
+
+- **Given** a project with optional symbol documents and repeated external imports
+- **When** the analyzer responds
+- **Then** file documents declare `Code` / `blob`
+- **And** symbol documents declare `CodeSymbol` / `symbol`
+- **And** external documents declare `CodeExternal` / `symbol`
+
+### Scenario: Code export is emitted as artifacts
+
+- **Given** a project with symbols and relations
+- **When** the analyzer responds
+- **Then** it emits `_code/symbols.json` and `_code/relations.json` artifacts
+- **And** core writes those artifacts instead of regenerating the legacy export
+
 ## Feature: Compatibility
 
 ### Scenario: Static build

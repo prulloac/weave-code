@@ -38,7 +38,9 @@ For each source file the extension returns:
 - title, description, keywords and content metadata;
 - optional symbol documents when `WEAVE_CODE_SYMBOL_DOCUMENTS=1` or `.weave/code.yaml` enables them;
 - imports, declares, references, calls, inherits and implements relations;
-- external dependency documents once a module is referenced more than once.
+- external dependency documents once a module is referenced more than once;
+- declared `Code`, `CodeSymbol` and `CodeExternal` document types and content kinds;
+- `_code/symbols.json` and `_code/relations.json` artifacts for generic export.
 
 ## Configuration
 

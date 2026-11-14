@@ -82,14 +82,24 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 func describe(stdout io.Writer, jsonMode bool) error {
 	if jsonMode {
 		return json.NewEncoder(stdout).Encode(map[string]any{
-			"v":                 "weave.extension/v1",
-			"name":              "code",
-			"source_extensions": sourceExtensions,
-			"analysis_modes":    []string{"project"},
+			"v":                   "weave.extension/v1",
+			"name":                "code",
+			"source_extensions":   sourceExtensions,
+			"analysis_modes":      []string{"project"},
+			"artifact_namespaces": []string{"_code/"},
+			"relation_kinds": []map[string]any{
+				{"name": "imports", "default": true},
+				{"name": "declares", "default": true},
+				{"name": "references"},
+				{"name": "calls"},
+				{"name": "inherits", "default": true},
+				{"name": "implements", "default": true},
+			},
 		})
 	}
 	fmt.Fprintln(stdout, "name: code")
 	fmt.Fprintln(stdout, "mode: project analysis")
 	fmt.Fprintf(stdout, "source extensions: %v\n", sourceExtensions)
+	fmt.Fprintln(stdout, "artifact namespaces: _code/")
 	return nil
 }

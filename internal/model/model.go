@@ -28,12 +28,21 @@ type Request struct {
 // Document is one file, symbol or external dependency.
 type Document struct {
 	ID              string         `json:"id"`
+	Type            string         `json:"type,omitempty"`
+	ContentKind     string         `json:"content_kind,omitempty"`
 	Title           string         `json:"title,omitempty"`
 	Description     string         `json:"description,omitempty"`
 	Keywords        []string       `json:"keywords,omitempty"`
 	Body            string         `json:"body,omitempty"`
 	ContentMetadata map[string]any `json:"content_metadata,omitempty"`
 	SymbolDocuments []Document     `json:"symbol_documents,omitempty"`
+}
+
+// Artifact is one extension-owned export artifact.
+type Artifact struct {
+	Path      string `json:"path"`
+	MediaType string `json:"media_type,omitempty"`
+	Content   any    `json:"content"`
 }
 
 // Relation is one code relationship.
@@ -49,5 +58,6 @@ type Response struct {
 	Documents         []Document `json:"documents"`
 	ExternalDocuments []Document `json:"external_documents,omitempty"`
 	Relations         []Relation `json:"relations,omitempty"`
+	Artifacts         []Artifact `json:"artifacts,omitempty"`
 	Warnings          []string   `json:"warnings,omitempty"`
 }

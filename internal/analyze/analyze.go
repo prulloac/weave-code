@@ -178,10 +178,12 @@ func Run(request model.Request) (model.Response, error) {
 		language := strings.Split(strings.TrimPrefix(id, "_code/external/"), "/")[0]
 		title := imported.Path
 		response.ExternalDocuments = append(response.ExternalDocuments, model.Document{
-			ID:       id,
-			Title:    title,
-			Keywords: []string{language, imported.Path},
-			Body:     imported.Path,
+			ID:          id,
+			Type:        "CodeExternal",
+			ContentKind: "symbol",
+			Title:       title,
+			Keywords:    []string{language, imported.Path},
+			Body:        imported.Path,
 			ContentMetadata: map[string]any{
 				"v": 1, "language": language, "package": imported.Path, "references": len(relations),
 			},
@@ -202,7 +204,65 @@ func Run(request model.Request) (model.Response, error) {
 		response.Warnings = append(response.Warnings, fmt.Sprintf("relations truncated to %d", maxProjectRelations))
 		response.Relations = response.Relations[:maxProjectRelations]
 	}
+	response.Artifacts = codeArtifacts(response)
 	return response, nil
+}
+
+type artifactSymbol struct {
+	ID              string         `json:"id"`
+	Type            string         `json:"type,omitempty"`
+	Title           string         `json:"title,omitempty"`
+	Description     string         `json:"description,omitempty"`
+	Keywords        []string       `json:"keywords,omitempty"`
+	Body            string         `json:"body,omitempty"`
+	ContentMetadata map[string]any `json:"content_metadata,omitempty"`
+}
+
+type artifactSymbols struct {
+	V       string           `json:"v"`
+	Symbols []artifactSymbol `json:"symbols"`
+}
+
+type artifactRelations struct {
+	V         string           `json:"v"`
+	Relations []model.Relation `json:"relations"`
+}
+
+func codeArtifacts(response model.Response) []model.Artifact {
+	symbols := make([]artifactSymbol, 0)
+	appendSymbol := func(document model.Document) {
+		if document.ContentKind != "symbol" {
+			return
+		}
+		symbols = append(symbols, artifactSymbol{
+			ID: document.ID, Type: document.Type, Title: document.Title,
+			Description: document.Description, Keywords: document.Keywords,
+			Body: document.Body, ContentMetadata: document.ContentMetadata,
+		})
+	}
+	for _, document := range response.Documents {
+		for _, symbol := range document.SymbolDocuments {
+			appendSymbol(symbol)
+		}
+	}
+	for _, document := range response.ExternalDocuments {
+		appendSymbol(document)
+	}
+	sort.Slice(symbols, func(i, j int) bool { return symbols[i].ID < symbols[j].ID })
+	artifacts := make([]model.Artifact, 0, 2)
+	if len(symbols) > 0 {
+		artifacts = append(artifacts, model.Artifact{
+			Path: "_code/symbols.json", MediaType: "application/json",
+			Content: artifactSymbols{V: "weave.code-symbols/v1", Symbols: symbols},
+		})
+	}
+	if len(response.Relations) > 0 {
+		artifacts = append(artifacts, model.Artifact{
+			Path: "_code/relations.json", MediaType: "application/json",
+			Content: artifactRelations{V: "weave.code-relations/v1", Relations: response.Relations},
+		})
+	}
+	return artifacts
 }
 
 func parseFile(file model.File, source []byte) model.Unit {
@@ -265,6 +325,8 @@ func fileDocument(unit model.Unit) model.Document {
 	keywords := keywords(unit)
 	return model.Document{
 		ID:          unit.File.ID,
+		Type:        "Code",
+		ContentKind: "blob",
 		Title:       title,
 		Description: truncate(unit.Doc, 1024),
 		Keywords:    keywords,
@@ -288,6 +350,8 @@ func symbolDocument(unit model.Unit, symbol model.Symbol) model.Document {
 	}
 	return model.Document{
 		ID:          symbolID(unit, symbol),
+		Type:        "CodeSymbol",
+		ContentKind: "symbol",
 		Title:       symbolPath(unit, symbol),
 		Description: truncate(symbol.Doc, 1024),
 		Keywords:    []string{unit.Language, symbol.Kind, symbol.Name},

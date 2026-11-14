@@ -32,7 +32,8 @@ scripts/                verification and installers
 ## Invariants
 
 1. **Static builds:** no C libraries, no compiler, no language server, no network.
-2. **Contract only:** speak `weave.cli/v1`; never import Weave packages or read a database.
+2. **Contract only:** speak `weave.cli/v1`; never import Weave packages or read a database. Declare
+   document types, content kinds and `_code` artifacts rather than relying on core defaults.
 3. **Source only:** read files under `bundle_root`/`path`; never write the bundle.
 4. **Bounded:** enforce the file, project, keyword, symbol and response limits from the specification.
 5. **Deterministic:** sort relations and keep document order.
@@ -49,6 +50,7 @@ scripts/                verification and installers
   signatures, so symbol context carries across sibling nodes.
 - Fixtures are temporary directories; no real project or database is used.
 - Keep `--describe --json` stable; Weave reads it before every project write.
+- `_code` export is emitted as response artifacts; core writes them when present.
 
 ## Documentation split
 
