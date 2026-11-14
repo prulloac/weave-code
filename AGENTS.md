@@ -12,6 +12,7 @@ analysis over stdin/stdout and never imports Weave engine internals.
 - Describe: `go run . --describe --json`
 - Version: `go run . --version`
 - Full gate: `./scripts/verify.sh`
+- Cross-repo integration: `WEAVE_SOURCE=../weave ./scripts/integration.sh`
 - User-level install: `./scripts/install.sh --help` (or `scripts/install.ps1` on Windows)
 
 ## Layout
@@ -26,7 +27,7 @@ internal/treesitterlang/ pure-Go tree-sitter parsers for the remaining languages
 internal/codeconfig/     `.weave/code.yaml` loading and ignore matching
 internal/lexical/        fallback extraction
 docs/bdd/               extension-side behavior scenarios
-scripts/                verification and installers
+scripts/                verification, installers and cross-repository integration
 ```
 
 ## Invariants

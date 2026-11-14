@@ -80,6 +80,7 @@ go build -o weave-code .
 go test ./...
 go vet ./...
 ./scripts/verify.sh
+WEAVE_SOURCE=../weave ./scripts/integration.sh
 ```
 
 The project contract is
