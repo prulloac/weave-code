@@ -84,6 +84,8 @@ func describe(stdout io.Writer, jsonMode bool) error {
 		return json.NewEncoder(stdout).Encode(map[string]any{
 			"v":                   "weave.extension/v1",
 			"name":                "code",
+			"version":             version,
+			"requires":            []map[string]any{{"name": "weave", "min_version": "0.11.0"}},
 			"source_extensions":   sourceExtensions,
 			"analysis_modes":      []string{"project"},
 			"artifact_namespaces": []string{"_code/"},
